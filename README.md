@@ -4,7 +4,7 @@ A small framework to build golang service super quick.
 
 ## Getting started
 
-```
+```go
 func main() {
 
 	s := srvkit.Service{
