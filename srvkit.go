@@ -58,9 +58,11 @@ func Run(s *Service, fn func()) {
 	setupServer(s)
 
 	// Setup the Pubsub subscription
-	err = s.Subscription.Setup(s)
-	if err != nil {
-		log.Fatal("Failed to setup Pubsub: ", err)
+	if s.Subscription != nil {
+		err = s.Subscription.Setup(s)
+		if err != nil {
+			log.Fatal("Failed to setup Pubsub: ", err)
+		}
 	}
 
 	// Invoke main service func
