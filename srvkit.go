@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const version = "1.0.0"
+const version = "1.0.1"
 
 // A Service defines the application running
 type Service struct {
