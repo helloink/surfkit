@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const version = "1.0.1"
+const version = "1.1.0"
 
 // A Service defines the application running
 type Service struct {
@@ -30,6 +30,10 @@ type Service struct {
 
 	// Srv allows access to the underlying webserver.
 	Srv *http.Server
+
+	// SrvHandler allows to set the request handler. If set, make sure it
+	// eventually wraps service.Router.
+	SrvHandler http.Handler
 }
 
 // Env reads a variable from ENV or fails fatal
@@ -92,6 +96,8 @@ func assertEnvironment(s *Service) {
 func setupServer(s *Service) {
 	s.Router = mux.NewRouter()
 	s.Router.HandleFunc("/", healthEndpoint).Methods("GET")
+
+	s.SrvHandler = s.Router
 }
 
 func healthEndpoint(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +111,7 @@ func enableServer(s *Service) error {
 	}
 
 	s.Srv = &http.Server{
-		Handler:      s.Router,
+		Handler:      s.SrvHandler,
 		Addr:         fmt.Sprintf(":%s", port),
 		WriteTimeout: 10 * time.Second,
 		ReadTimeout:  10 * time.Second,
