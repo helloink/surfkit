@@ -1,4 +1,4 @@
-package srvkit
+package surfkit
 
 import (
 	"context"

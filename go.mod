@@ -1,4 +1,4 @@
-module github.com/helloink/srvkit
+module github.com/helloink/surfkit
 
 go 1.12
 
