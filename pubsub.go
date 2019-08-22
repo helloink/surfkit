@@ -1,4 +1,4 @@
-package srvkit
+package surfkit
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 )
 
 // An Event as delivered via Pubsub message
+// TODO: Eventually drop this and replace it with the CloudEvent type
 type Event struct {
 
 	// Data is the event's payload. Use the #DataTo method
@@ -67,11 +68,15 @@ type Subscription interface {
 // new messages pushed from the Pubsub server.
 type PushSubscription struct {
 	Topic      string
-	HandleFunc func(e *Event) bool
+	HandleFunc func(s *Service, e *Event) bool
+
+	service *Service
 }
 
 // Setup receive routes and the subscription
 func (p *PushSubscription) Setup(s *Service) error {
+	p.service = s
+
 	host, ok := os.LookupEnv("HOST")
 	if !ok {
 		port, ok := os.LookupEnv("PORT")
@@ -157,7 +162,7 @@ func (p *PushSubscription) incomingPubsubMessages(w http.ResponseWriter, r *http
 		Raw:  ev,
 	}
 
-	ack := p.HandleFunc(e)
+	ack := p.HandleFunc(p.service, e)
 	if ack {
 		w.WriteHeader(http.StatusOK)
 	} else {

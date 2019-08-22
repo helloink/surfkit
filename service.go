@@ -1,16 +1,13 @@
-package srvkit
+package surfkit
 
 import (
-	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"time"
+	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/helloink/surfkit/events"
 )
-
-const version = "1.1.0"
 
 // A Service defines the application running
 type Service struct {
@@ -22,8 +19,11 @@ type Service struct {
 	Version string
 
 	// Pubsub subscription.
-	// Available modes are srvkit.PushSubscription and srvkit.PullSubscription.
+	// Available modes are surfkit.PushSubscription and surfkit.PullSubscription.
 	Subscription Subscription
+
+	// Defines the services (Pubsub) output.
+	Output *Output
 
 	// A Router can be used to attach URL handlers
 	Router *mux.Router
@@ -34,16 +34,10 @@ type Service struct {
 	// SrvHandler allows to set the request handler. If set, make sure it
 	// eventually wraps service.Router.
 	SrvHandler http.Handler
-}
 
-// Env reads a variable from ENV or fails fatal
-func Env(s string) string {
-	val, ok := os.LookupEnv(s)
-	if !ok {
-		log.Fatalf("failed to read %s from env", s)
-	}
-
-	return val
+	// A Publisher take care of sending events to Pubsub.
+	// Use surfkit.PublishEvent for a convinient method to send events.
+	Publisher *events.Publisher
 }
 
 // Run executes the service's run loop.
@@ -53,7 +47,7 @@ func Env(s string) string {
 func Run(s *Service, fn func()) {
 	var err error
 
-	log.Printf("Booting %s v%s (srvkit %s)", s.Name, s.Version, version)
+	log.Printf("Booting %s v%s (surfkit %s)", s.Name, s.Version, version)
 
 	// Make sure all required information is available in the environment
 	assertEnvironment(s)
@@ -69,6 +63,21 @@ func Run(s *Service, fn func()) {
 		}
 	}
 
+	// Setup the Publisher
+	if s.Output != nil {
+
+		topic := convertEventTypeToTopic(s.Output.EventType)
+		s.Publisher = &events.Publisher{
+			ProjectID: Env("PUBSUB_PROJECT_ID"),
+			Topic:     topic,
+		}
+
+		err := s.Publisher.Setup()
+		if err != nil {
+			log.Fatal("Failed to setup Output Publisher: ", err)
+		}
+	}
+
 	// Invoke main service func
 	fn()
 
@@ -79,44 +88,22 @@ func Run(s *Service, fn func()) {
 		log.Fatal("Failed to boot webserver: ", err)
 	}
 
+	log.Println("Initiating teardown...")
+	s.Teardown()
+
 	log.Println("Good bye.")
 }
 
-func assertEnvironment(s *Service) {
+// Teardown is called so the service can do cleanup work before finally going down.
+func (s *Service) Teardown() {
 
-	// If a Pubsub Subscription is set, the project id must be set in ENV.
-	if s.Subscription != nil {
-		_, ok := os.LookupEnv("PUBSUB_PROJECT_ID")
-		if !ok {
-			log.Fatal("in order to use pubsub make sure PUBSUB_PROJECT_ID is available in ENV")
-		}
-	}
-}
-
-func setupServer(s *Service) {
-	s.Router = mux.NewRouter()
-	s.Router.HandleFunc("/", healthEndpoint).Methods("GET")
-
-	s.SrvHandler = s.Router
-}
-
-func healthEndpoint(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-}
-
-func enableServer(s *Service) error {
-	port, ok := os.LookupEnv("PORT")
-	if !ok {
-		port = "3000"
+	// Stop Publishers
+	if s.Publisher != nil {
+		s.Publisher.Stop()
 	}
 
-	s.Srv = &http.Server{
-		Handler:      s.SrvHandler,
-		Addr:         fmt.Sprintf(":%s", port),
-		WriteTimeout: 10 * time.Second,
-		ReadTimeout:  10 * time.Second,
-	}
+}
 
-	log.Printf("Server enabled on port %s", port)
-	return s.Srv.ListenAndServe()
+func convertEventTypeToTopic(eventType string) string {
+	return strings.Replace(eventType, ".", "-", -1)
 }
