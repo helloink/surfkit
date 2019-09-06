@@ -6,10 +6,13 @@ A small framework to surf the world! and also to build golang service super quic
 ## Getting started
 
 ```go
+
+import "github.com/helloink/surfkit"
+
 func main() {
 
 	s := surfkit.Service{
-		Name:    "gustav-library",
+		Name:    "my-service",
 		Version: "1.0.0",
 
 		Subscription: &surfkit.PushSubscription{
@@ -18,13 +21,14 @@ func main() {
 		},
 	}
 
-	surfkit.Run(&s, func() {})
+	surfkit.Run(&s, func(
+		// Noop
+	) {})
 }
 
+// Return `true` if you want the underlying pubsub message to be acknowledged (ack)
+// and `false` for nack.
 func handleMessages(e *surfkit.Event) bool {
-
-    // Return `true` if you want the underlying pubsub message to be acknowledged (ack)
-    // and `false` for nack.
 	return true
 }
 ```

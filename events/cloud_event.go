@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"log"
 	"time"
 
@@ -30,7 +31,7 @@ type CloudEvent struct {
 }
 
 // NewCloudEvent returns a new and initialised CloudEvent
-func NewCloudEvent(eventTyep string, payload interface{}) CloudEvent {
+func NewCloudEvent(source string, eventType string, payload interface{}) CloudEvent {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		log.Fatalln("Failed to generate UUID:", err)
@@ -38,8 +39,20 @@ func NewCloudEvent(eventTyep string, payload interface{}) CloudEvent {
 
 	return CloudEvent{
 		ID:          id.String(),
+		Source:      source,
 		Specversion: specVersion,
+		Type:        eventType,
 		Time:        time.Now().UTC(),
 		Data:        payload,
 	}
+}
+
+// DataTo turns the Data field into the passed Type
+func (e *CloudEvent) DataTo(obj interface{}) error {
+	pb, err := json.Marshal(e.Data)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(pb, obj)
 }

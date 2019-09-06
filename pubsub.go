@@ -12,25 +12,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/helloink/surfkit/events"
 )
-
-// An Event as delivered via Pubsub message
-// TODO: Eventually drop this and replace it with the CloudEvent type
-type Event struct {
-
-	// Data is the event's payload. Use the #DataTo method
-	// to turn it into a struct.
-	Data []byte
-
-	// Raw allows acces to the underlying message container. Either
-	// an HTTP body or a pubsub.Message. Have fun
-	Raw interface{}
-}
-
-// DataTo turns the Data field into the passed Type
-func (e *Event) DataTo(obj interface{}) error {
-	return json.Unmarshal(e.Data, obj)
-}
 
 // PubsubPushMessageEnvelope as received via an http endpoint from a pubsub server
 type PubsubPushMessageEnvelope struct {
@@ -68,7 +51,7 @@ type Subscription interface {
 // new messages pushed from the Pubsub server.
 type PushSubscription struct {
 	Topic      string
-	HandleFunc func(s *Service, e *Event) bool
+	HandleFunc func(s *Service, e *events.CloudEvent) bool
 
 	service *Service
 }
@@ -157,9 +140,11 @@ func (p *PushSubscription) incomingPubsubMessages(w http.ResponseWriter, r *http
 		return
 	}
 
-	e := &Event{
-		Data: data,
-		Raw:  ev,
+	var e *events.CloudEvent
+	err = json.Unmarshal(data, &e)
+	if err != nil {
+		p.respondWithError(w, "Failed to unmarshal message data", err)
+		return
 	}
 
 	ack := p.HandleFunc(p.service, e)
