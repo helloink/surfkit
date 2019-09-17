@@ -66,10 +66,9 @@ func Run(s *Service, fn func()) {
 	// Setup the Publisher
 	if s.Output != nil {
 
-		topic := convertEventTypeToTopic(s.Output.EventType)
 		s.Publisher = &events.Publisher{
 			ProjectID: Env("PUBSUB_PROJECT_ID"),
-			Topic:     topic,
+			Topic:     s.Output.EventType,
 		}
 
 		err := s.Publisher.Setup()
