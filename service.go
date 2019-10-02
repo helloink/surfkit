@@ -90,6 +90,14 @@ func Run(s *Service, fn func()) {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
+	// Enable Pubsub Listening
+	if s.Subscription != nil {
+		err := s.Subscription.Listen(s)
+		if err != nil {
+			log.Fatal("Failed to listen on Pubsub: ", err)
+		}
+	}
+
 	// Any service will eventually rest on a webserver. Any empty service,
 	// meaning no pubsub or handler have been set, will only serve the /health endpoint.
 	go func() {
