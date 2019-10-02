@@ -228,8 +228,21 @@ func (p *PullSubscription) Listen(s *Service) error {
 	}
 
 	err = sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
-		log.Printf("Got message: %s", m.Data)
-		m.Ack()
+		var e *events.CloudEvent
+		err = json.Unmarshal(m.Data, &e)
+		if err != nil {
+			log.Printf("Failed to unmarshal pubsub message (%v)", err)
+			m.Nack()
+			return
+		}
+
+		log.Println("MESASGE", e)
+
+		if p.HandleFunc(p.service, e) {
+			m.Ack()
+		} else {
+			m.Nack()
+		}
 	})
 
 	if err != nil {
