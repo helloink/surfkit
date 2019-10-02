@@ -236,8 +236,6 @@ func (p *PullSubscription) Listen(s *Service) error {
 			return
 		}
 
-		log.Println("MESASGE", e)
-
 		if p.HandleFunc(p.service, e) {
 			m.Ack()
 		} else {
