@@ -92,10 +92,12 @@ func Run(s *Service, fn func()) {
 
 	// Enable Pubsub Listening
 	if s.Subscription != nil {
-		err := s.Subscription.Listen(s)
-		if err != nil {
-			log.Fatal("Failed to listen on Pubsub: ", err)
-		}
+		go func() {
+			err := s.Subscription.Listen(s)
+			if err != nil {
+				log.Fatal("Failed to listen on Pubsub: ", err)
+			}
+		}()
 	}
 
 	// Any service will eventually rest on a webserver. Any empty service,
