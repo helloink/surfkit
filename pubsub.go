@@ -39,12 +39,15 @@ func (m *PubsubPushMessage) DecodeData() ([]byte, error) {
 type Subscription interface {
 
 	// Setup is called during Service initialisation and shall be used
-	// by the Subscription to create subscriptions and other prerequisites
+	// by the Subscription to create subscriptions and other prerequisites.
 	Setup(s *Service) error
 
 	// Listen allows a Subscription to continously receive new messages.
 	// If not required by the implementation, just noop it.
 	Listen(s *Service) error
+
+	// Teardown is called during Service shutdown and shall be used to clean up.
+	Teardown(s *Service) error
 }
 
 // A PushSubscription uses an HTTP endpoint and gets
@@ -76,12 +79,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 	host, ok := os.LookupEnv("HOST")
 	if !ok {
-		port, ok := os.LookupEnv("PORT")
-		if !ok {
-			port = "3000"
-		}
-
-		host = fmt.Sprintf("http://%s:%s", s.Name, port)
+		host = fmt.Sprintf("http://%s:%s", s.Name, s.Env.Port)
 	}
 
 	path := "/sk/v1/messages"
@@ -89,16 +87,15 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 	s.Router.HandleFunc(path, p.incomingPubsubMessages).Methods("POST")
 
-	// No assert required. See comment on PORT reading.
-	projectID, _ := os.LookupEnv("PUBSUB_PROJECT_ID")
-
+	// I think there should only be one ctx per service [aw]
 	ctx := context.Background()
-	client, err := pubsub.NewClient(ctx, projectID)
+
+	client, err := pubsub.NewClient(ctx, s.Env.ProjectID)
 	if err != nil {
 		return fmt.Errorf("failed to setup pubsub (%v)", err)
 	}
 
-	subName := p.generateName()
+	subName := p.getName()
 
 	// Check if the subscription exists already
 	sub := client.Subscription(subName)
@@ -132,6 +129,21 @@ func (p *PushSubscription) Setup(s *Service) error {
 func (p *PushSubscription) Listen(s *Service) error {
 	// Noop
 	return nil
+}
+
+// Teardown the subscription.
+func (p *PushSubscription) Teardown(s *Service) error {
+
+	// I think there should only be one ctx per service [aw]
+	ctx := context.Background()
+
+	client, err := pubsub.NewClient(ctx, s.Env.ProjectID)
+	if err != nil {
+		return fmt.Errorf("failed to setup pubsub (%v)", err)
+	}
+
+	sub := client.Subscription(p.getName())
+	return sub.Delete(ctx)
 }
 
 func (p *PushSubscription) incomingPubsubMessages(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +190,7 @@ func (p *PushSubscription) respondWithError(w http.ResponseWriter, m string, err
 }
 
 // Generate a name for the subscription.
-func (p *PushSubscription) generateName() string {
+func (p *PushSubscription) getName() string {
 	if p.Name == "" {
 		return p.service.Name
 	}
