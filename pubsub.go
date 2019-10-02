@@ -49,9 +49,23 @@ type Subscription interface {
 
 // A PushSubscription uses an HTTP endpoint and gets
 // new messages pushed from the Pubsub server.
+//
+// Learn more about this here
+// https://cloud.google.com/pubsub/docs/subscriber#push-subscription
+//
 type PushSubscription struct {
-	Topic      string
+
+	// The Topic this subscription is attached to
+	Topic string
+
+	// A func that will be called as soon as a new message arrives on the attached `Topic`.
 	HandleFunc func(s *Service, e *events.CloudEvent) bool
+
+	// The name of this Subscription. This is by default the name of the Service and you should
+	// probably keep it this way as you'll otherwise break the built in load balancing.
+	//
+	// ¯\_(ツ)_/¯ ? Go ahead.
+	Name string
 
 	service *Service
 }
@@ -84,8 +98,10 @@ func (p *PushSubscription) Setup(s *Service) error {
 		return fmt.Errorf("failed to setup pubsub (%v)", err)
 	}
 
+	subName := p.generateName()
+
 	// Check if the subscription exists already
-	sub := client.Subscription(s.Name)
+	sub := client.Subscription(subName)
 	ok, err = sub.Exists(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check subscription (%v)", err)
@@ -93,7 +109,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 	// If it doesn't exists, well...
 	if !ok {
-		_, err := client.CreateSubscription(ctx, s.Name, pubsub.SubscriptionConfig{
+		_, err := client.CreateSubscription(ctx, subName, pubsub.SubscriptionConfig{
 			Topic:       client.Topic(p.Topic),
 			AckDeadline: 10 * time.Second,
 
@@ -107,7 +123,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 		}
 	}
 
-	log.Printf("Pubsub: Endpoint mounted at %s", endpoint)
+	log.Printf("Pubsub: Subscription (%s) endpoint mounted at %s", subName, endpoint)
 
 	return nil
 }
@@ -159,4 +175,13 @@ func (p *PushSubscription) incomingPubsubMessages(w http.ResponseWriter, r *http
 func (p *PushSubscription) respondWithError(w http.ResponseWriter, m string, err error) {
 	log.Printf("%s (%v)", m, err)
 	w.WriteHeader(http.StatusNotAcceptable)
+}
+
+// Generate a name for the subscription.
+func (p *PushSubscription) generateName() string {
+	if p.Name == "" {
+		return p.service.Name
+	}
+
+	return p.Name
 }
