@@ -122,8 +122,6 @@ func (s *Service) Teardown() {
 		if err != nil {
 			log.Println("Failed to teardown subscription:", err)
 		}
-
-		log.Println("Teardown", err)
 	}
 }
 
