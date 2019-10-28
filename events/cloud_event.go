@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
 )
 
 // Guidelines to construct a proper CloudEvent model: https://github.com/cloudevents/spec/blob/v0.3/spec.md#required-attributes
@@ -55,4 +56,15 @@ func (e *CloudEvent) DataTo(obj interface{}) error {
 	}
 
 	return json.Unmarshal(pb, obj)
+}
+
+// GetData at a specific path.
+// Check https://github.com/tidwall/gjson for syntax
+func (e *CloudEvent) GetData(path string) (gjson.Result, error) {
+	b, err := json.Marshal(e.Data)
+	if err != nil {
+		return gjson.Result{}, err
+	}
+
+	return gjson.GetBytes(b, path), nil
 }
