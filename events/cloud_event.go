@@ -60,11 +60,12 @@ func (e *CloudEvent) DataTo(obj interface{}) error {
 
 // GetData at a specific path.
 // Check https://github.com/tidwall/gjson for syntax
-func (e *CloudEvent) GetData(path string) (gjson.Result, error) {
+func (e *CloudEvent) GetData(path string) gjson.Result {
 	b, err := json.Marshal(e.Data)
 	if err != nil {
-		return gjson.Result{}, err
+		log.Fatalln("Failed to Marshal interface:", err)
+		return gjson.Result{}
 	}
 
-	return gjson.GetBytes(b, path), nil
+	return gjson.GetBytes(b, path)
 }
