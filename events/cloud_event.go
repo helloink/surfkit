@@ -2,11 +2,13 @@ package events
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // Guidelines to construct a proper CloudEvent model: https://github.com/cloudevents/spec/blob/v0.3/spec.md#required-attributes
@@ -58,9 +60,9 @@ func (e *CloudEvent) DataTo(obj interface{}) error {
 	return json.Unmarshal(pb, obj)
 }
 
-// GetData at a specific path.
+// GetDataAt returns the json object at the specific path
 // Check https://github.com/tidwall/gjson for syntax
-func (e *CloudEvent) GetData(path string) gjson.Result {
+func (e *CloudEvent) GetDataAt(path string) gjson.Result {
 	b, err := json.Marshal(e.Data)
 	if err != nil {
 		log.Fatalln("Failed to Marshal interface:", err)
@@ -68,4 +70,23 @@ func (e *CloudEvent) GetData(path string) gjson.Result {
 	}
 
 	return gjson.GetBytes(b, path)
+}
+
+// SetDataAt sets the object at the specific path
+// Check https://github.com/tidwall/sjson for syntax
+func (e *CloudEvent) SetDataAt(path string, value interface{}) error {
+	var b []byte
+	var err error
+
+	b, err = json.Marshal(e.Data)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal (%v)", err)
+	}
+
+	b, err = sjson.SetBytes(b, path, value)
+	if err != nil {
+		return fmt.Errorf("failed to set bytes (%v)", err)
+	}
+
+	return json.Unmarshal(b, &e.Data)
 }
