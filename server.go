@@ -25,8 +25,8 @@ func enableServer(s *Service) error {
 	s.Srv = &http.Server{
 		Handler:      s.SrvHandler,
 		Addr:         fmt.Sprintf(":%s", s.Env.Port),
-		WriteTimeout: 10 * time.Second,
-		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		ReadTimeout:  60 * time.Second,
 	}
 
 	log.Printf("Server enabled on port %s", s.Env.Port)
