@@ -65,7 +65,7 @@ type PushSubscription struct {
 	HandleFunc func(s *Service, e *events.CloudEvent) bool
 
 	// See https://godoc.org/cloud.google.com/go/pubsub#ReceiveSettings
-	ReceiveSettings pubsub.ReceiveSettings
+	ReceiveSettings *pubsub.ReceiveSettings
 
 	service *Service
 }
@@ -93,7 +93,10 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 	// Setup and configure the subscription object
 	sub := client.Subscription(s.Name)
-	sub.ReceiveSettings = p.ReceiveSettings
+
+	if p.ReceiveSettings != nil {
+		sub.ReceiveSettings = *p.ReceiveSettings
+	}
 
 	// Check if the subscription exists already
 	ok, err = sub.Exists(ctx)
