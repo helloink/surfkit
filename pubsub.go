@@ -64,6 +64,9 @@ type PushSubscription struct {
 	// A func that will be called as soon as a new message arrives on the attached `Topic`.
 	HandleFunc func(s *Service, e *events.CloudEvent) bool
 
+	// See https://godoc.org/cloud.google.com/go/pubsub#ReceiveSettings
+	ReceiveSettings pubsub.ReceiveSettings
+
 	service *Service
 }
 
@@ -88,8 +91,11 @@ func (p *PushSubscription) Setup(s *Service) error {
 		return fmt.Errorf("failed to setup pubsub (%v)", err)
 	}
 
-	// Check if the subscription exists already
+	// Setup and configure the subscription object
 	sub := client.Subscription(s.Name)
+	sub.ReceiveSettings = p.ReceiveSettings
+
+	// Check if the subscription exists already
 	ok, err = sub.Exists(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check subscription (%v)", err)
