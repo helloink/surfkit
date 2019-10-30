@@ -12,25 +12,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/helloink/surfkit/events"
 )
-
-// An Event as delivered via Pubsub message
-// TODO: Eventually drop this and replace it with the CloudEvent type
-type Event struct {
-
-	// Data is the event's payload. Use the #DataTo method
-	// to turn it into a struct.
-	Data []byte
-
-	// Raw allows acces to the underlying message container. Either
-	// an HTTP body or a pubsub.Message. Have fun
-	Raw interface{}
-}
-
-// DataTo turns the Data field into the passed Type
-func (e *Event) DataTo(obj interface{}) error {
-	return json.Unmarshal(e.Data, obj)
-}
 
 // PubsubPushMessageEnvelope as received via an http endpoint from a pubsub server
 type PubsubPushMessageEnvelope struct {
@@ -56,19 +39,33 @@ func (m *PubsubPushMessage) DecodeData() ([]byte, error) {
 type Subscription interface {
 
 	// Setup is called during Service initialisation and shall be used
-	// by the Subscription to create subscriptions and other prerequisites
+	// by the Subscription to create subscriptions and other prerequisites.
 	Setup(s *Service) error
 
 	// Listen allows a Subscription to continously receive new messages.
 	// If not required by the implementation, just noop it.
 	Listen(s *Service) error
+
+	// Teardown is called during Service shutdown and shall be used to clean up.
+	Teardown(s *Service) error
 }
 
 // A PushSubscription uses an HTTP endpoint and gets
 // new messages pushed from the Pubsub server.
+//
+// Learn more about this here
+// https://cloud.google.com/pubsub/docs/subscriber#push-subscription
+//
 type PushSubscription struct {
-	Topic      string
-	HandleFunc func(s *Service, e *Event) bool
+
+	// The Topic this subscription is attached to
+	Topic string
+
+	// A func that will be called as soon as a new message arrives on the attached `Topic`.
+	HandleFunc func(s *Service, e *events.CloudEvent) bool
+
+	// See https://godoc.org/cloud.google.com/go/pubsub#ReceiveSettings
+	ReceiveSettings *pubsub.ReceiveSettings
 
 	service *Service
 }
@@ -79,12 +76,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 	host, ok := os.LookupEnv("HOST")
 	if !ok {
-		port, ok := os.LookupEnv("PORT")
-		if !ok {
-			port = "3000"
-		}
-
-		host = fmt.Sprintf("http://%s:%s", s.Name, port)
+		host = fmt.Sprintf("http://%s:%s", s.Name, s.Env.Port)
 	}
 
 	path := "/sk/v1/messages"
@@ -92,17 +84,21 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 	s.Router.HandleFunc(path, p.incomingPubsubMessages).Methods("POST")
 
-	// No assert required. See comment on PORT reading.
-	projectID, _ := os.LookupEnv("PUBSUB_PROJECT_ID")
-
 	ctx := context.Background()
-	client, err := pubsub.NewClient(ctx, projectID)
+
+	client, err := pubsub.NewClient(ctx, s.Env.ProjectID)
 	if err != nil {
 		return fmt.Errorf("failed to setup pubsub (%v)", err)
 	}
 
-	// Check if the subscription exists already
+	// Setup and configure the subscription object
 	sub := client.Subscription(s.Name)
+
+	if p.ReceiveSettings != nil {
+		sub.ReceiveSettings = *p.ReceiveSettings
+	}
+
+	// Check if the subscription exists already
 	ok, err = sub.Exists(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check subscription (%v)", err)
@@ -124,13 +120,19 @@ func (p *PushSubscription) Setup(s *Service) error {
 		}
 	}
 
-	log.Printf("Pubsub: Endpoint mounted at %s", endpoint)
+	log.Printf("Pubsub: Subscription (%s) endpoint mounted at %s", s.Name, endpoint)
 
 	return nil
 }
 
 // Listen .. noop
 func (p *PushSubscription) Listen(s *Service) error {
+	// Noop
+	return nil
+}
+
+// Teardown the subscription.
+func (p *PushSubscription) Teardown(s *Service) error {
 	// Noop
 	return nil
 }
@@ -157,9 +159,11 @@ func (p *PushSubscription) incomingPubsubMessages(w http.ResponseWriter, r *http
 		return
 	}
 
-	e := &Event{
-		Data: data,
-		Raw:  ev,
+	var e *events.CloudEvent
+	err = json.Unmarshal(data, &e)
+	if err != nil {
+		p.respondWithError(w, "Failed to unmarshal message data", err)
+		return
 	}
 
 	ack := p.HandleFunc(p.service, e)
@@ -174,4 +178,105 @@ func (p *PushSubscription) incomingPubsubMessages(w http.ResponseWriter, r *http
 func (p *PushSubscription) respondWithError(w http.ResponseWriter, m string, err error) {
 	log.Printf("%s (%v)", m, err)
 	w.WriteHeader(http.StatusNotAcceptable)
+}
+
+// A PullSubscription continiously pulls messages from a pubsub server.
+// Learn more here https://cloud.google.com/pubsub/docs/subscriber#pull-subscription
+type PullSubscription struct {
+
+	// The Topic this subscription is attached to
+	Topic string
+
+	// A func that will be called as soon as a new message arrives on the attached `Topic`.
+	HandleFunc func(s *Service, e *events.CloudEvent) bool
+
+	// The name of this Subscription. This is by default the name of the Service and you should
+	// probably keep it this way as you'll otherwise break the built in load balancing.
+	//
+	// ¯\_(ツ)_/¯ ? Go ahead.
+	Name string
+
+	service *Service
+}
+
+// Setup Subscription
+func (p *PullSubscription) Setup(s *Service) error {
+	p.service = s
+	return nil
+}
+
+// Listen for new messages on Pubsub
+func (p *PullSubscription) Listen(s *Service) error {
+
+	ctx := context.Background()
+
+	client, err := pubsub.NewClient(ctx, s.Env.ProjectID)
+	if err != nil {
+		return fmt.Errorf("failed to setup pubsub (%v)", err)
+	}
+
+	subName := p.getName()
+
+	// Check if the subscription exists already
+	sub := client.Subscription(subName)
+	ok, err := sub.Exists(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check subscription (%v)", err)
+	}
+
+	// If it doesn't exists, well...
+	if !ok {
+		sub, err = client.CreateSubscription(ctx, subName, pubsub.SubscriptionConfig{
+			Topic:       client.Topic(p.Topic),
+			AckDeadline: 10 * time.Second,
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to create subscription (%v)", err)
+		}
+	}
+
+	err = sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
+		var e *events.CloudEvent
+		err = json.Unmarshal(m.Data, &e)
+		if err != nil {
+			log.Printf("Failed to unmarshal pubsub message (%v)", err)
+			m.Nack()
+			return
+		}
+
+		if p.HandleFunc(p.service, e) {
+			m.Ack()
+		} else {
+			m.Nack()
+		}
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to listen for new messages (%v)", err)
+	}
+
+	return nil
+}
+
+// Teardown the subscription.
+func (p *PullSubscription) Teardown(s *Service) error {
+	ctx := context.Background()
+
+	client, err := pubsub.NewClient(ctx, s.Env.ProjectID)
+	if err != nil {
+		return fmt.Errorf("failed to setup pubsub (%v)", err)
+	}
+
+	sub := client.Subscription(p.getName())
+	return sub.Delete(ctx)
+}
+
+// Generate a name for the subscription.
+func (p *PullSubscription) getName() string {
+	if p.Name == "" {
+		return p.service.Name
+	}
+
+	return p.Name
 }

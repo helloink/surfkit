@@ -3,7 +3,10 @@ package surfkit
 import (
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/gorilla/mux"
 	"github.com/helloink/surfkit/events"
@@ -38,6 +41,9 @@ type Service struct {
 	// A Publisher take care of sending events to Pubsub.
 	// Use surfkit.PublishEvent for a convinient method to send events.
 	Publisher *events.Publisher
+
+	// Env contains configuration read from the environment and is automatically set
+	Env *ServiceEnv
 }
 
 // Run executes the service's run loop.
@@ -66,10 +72,9 @@ func Run(s *Service, fn func()) {
 	// Setup the Publisher
 	if s.Output != nil {
 
-		topic := convertEventTypeToTopic(s.Output.EventType)
 		s.Publisher = &events.Publisher{
 			ProjectID: Env("PUBSUB_PROJECT_ID"),
-			Topic:     topic,
+			Topic:     s.Output.EventType,
 		}
 
 		err := s.Publisher.Setup()
@@ -81,14 +86,33 @@ func Run(s *Service, fn func()) {
 	// Invoke main service func
 	fn()
 
-	// Any service will eventually rest on a webserver. Any empty service,
-	// meaning no pubsub or handler have been set, will only serve the /health endpoint.
-	err = enableServer(s)
-	if err != nil {
-		log.Fatal("Failed to boot webserver: ", err)
+	// Signal handling so we can gracefully shutdown service
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	// Enable Pubsub Listening
+	if s.Subscription != nil {
+		go func() {
+			err := s.Subscription.Listen(s)
+			if err != nil {
+				log.Fatal("Failed to listen on Pubsub: ", err)
+			}
+		}()
 	}
 
-	log.Println("Initiating teardown...")
+	// Any service will eventually rest on a webserver. Any empty service,
+	// meaning no pubsub or handler have been set, will only serve the /health endpoint.
+	go func() {
+		err := enableServer(s)
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatal("Failed to boot webserver: ", err)
+		}
+	}()
+
+	<-done
+	log.Println("Initiating Teardown...")
+
+	shutdownServer(s)
 	s.Teardown()
 
 	log.Println("Good bye.")
@@ -102,6 +126,13 @@ func (s *Service) Teardown() {
 		s.Publisher.Stop()
 	}
 
+	// Cleanup Subscriptions
+	if s.Subscription != nil {
+		err := s.Subscription.Teardown(s)
+		if err != nil {
+			log.Println("Failed to teardown subscription:", err)
+		}
+	}
 }
 
 func convertEventTypeToTopic(eventType string) string {
