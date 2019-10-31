@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/pubsub"
@@ -75,7 +76,22 @@ func (p *PushSubscription) Setup(s *Service) error {
 	p.service = s
 
 	host, ok := os.LookupEnv("HOST")
-	if !ok {
+	if ok {
+
+		// This is a special mechanism built to make it easier to deploy Surfkit Services on Cloud Run.
+		// When a service is freshly launched, its own URL is still unknown - Google assigns it after
+		// the first successful setup. This URL is needed to subscribe to a Pubsub topic  so that the
+		// Pubsub server knows which URL to send messages to.
+		//
+		// Skipping the Subscription setup allows to have the service being deployed once, so its URL can be
+		// retrieved and correctly set as the HOST env with the next deploy. Only when the URL is correct,
+		// a Subscription is created.
+		if strings.HasPrefix(host, "http") == false {
+			log.Println("WARN: HOST not valid. Skipping Pubsub Push Activation")
+			return nil
+		}
+
+	} else {
 		host = fmt.Sprintf("http://%s:%s", s.Name, s.Env.Port)
 	}
 
