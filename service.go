@@ -64,8 +64,8 @@ func Run(s *Service, fn func()) {
 	setupServer(s)
 
 	// Setup the Pubsub subscription
-	if s.Subscription != nil {
-		err = s.Subscription.Setup(s)
+	for _, sub := range pubsubSubscriptions(s) {
+		err = sub.Setup(s)
 		if err != nil {
 			log.Fatal("Failed to setup Pubsub: ", err)
 		}
@@ -146,7 +146,7 @@ func convertEventTypeToTopic(eventType string) string {
 func pubsubSubscriptions(s *Service) []Subscription {
 	if s.Subscription != nil {
 		return append(s.Subscriptions, s.Subscription)
-	} else {
-		return s.Subscriptions
 	}
+
+	return s.Subscriptions
 }
