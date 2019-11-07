@@ -103,7 +103,7 @@ func (p *PushSubscription) Setup(s *Service, ix int) error {
 		host = fmt.Sprintf("http://%s:%s", s.Name, s.Env.Port)
 	}
 
-	path := "/sk/v1/messages"
+	path := fmt.Sprintf("/sk/v1/messages/%s", p.Name)
 	endpoint := fmt.Sprintf("%s%s", host, path)
 
 	s.Router.HandleFunc(path, p.incomingPubsubMessages).Methods("POST")
