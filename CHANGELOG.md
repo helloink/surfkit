@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 - Support for multiple Pubsub Inputs (Subscriptions)
+- Include service version in Subscription names
 
 ## [1.5.0] - 2019-11-04
 - GCP Bearer Authentication support for HTTPs

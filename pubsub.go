@@ -41,7 +41,7 @@ type Subscription interface {
 
 	// Setup is called during Service initialisation and shall be used
 	// by the Subscription to create subscriptions and other prerequisites.
-	Setup(s *Service) error
+	Setup(s *Service, ix int) error
 
 	// Listen allows a Subscription to continously receive new messages.
 	// If not required by the implementation, just noop it.
@@ -65,6 +65,12 @@ type PushSubscription struct {
 	// A func that will be called as soon as a new message arrives on the attached `Topic`.
 	HandleFunc func(s *Service, e *events.CloudEvent) bool
 
+	// The name of this Subscription. This is by default the name of the Service and you should
+	// probably keep it this way as you'll otherwise break the built-in load balancing.
+	//
+	// ¯\_(ツ)_/¯ ? Go ahead.
+	Name string
+
 	// See https://godoc.org/cloud.google.com/go/pubsub#ReceiveSettings
 	ReceiveSettings *pubsub.ReceiveSettings
 
@@ -72,7 +78,9 @@ type PushSubscription struct {
 }
 
 // Setup receive routes and the subscription
-func (p *PushSubscription) Setup(s *Service) error {
+func (p *PushSubscription) Setup(s *Service, ix int) error {
+
+	p.Name = subscriptionName(p, p.Name, s, ix)
 	p.service = s
 
 	host, ok := os.LookupEnv("HOST")
@@ -80,7 +88,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 		// This is a special mechanism built to make it easier to deploy Surfkit Services on Cloud Run.
 		// When a service is freshly launched, its own URL is still unknown - Google assigns it after
-		// the first successful setup. This URL is needed to subscribe to a Pubsub topic  so that the
+		// the first successful setup. But, this URL is needed to subscribe to a Pubsub topic so that the
 		// Pubsub server knows which URL to send messages to.
 		//
 		// Skipping the Subscription setup allows to have the service being deployed once, so its URL can be
@@ -108,7 +116,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 	}
 
 	// Setup and configure the subscription object
-	sub := client.Subscription(s.Name)
+	sub := client.Subscription(p.Name)
 
 	if p.ReceiveSettings != nil {
 		sub.ReceiveSettings = *p.ReceiveSettings
@@ -136,8 +144,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 		}
 	}
 
-	log.Printf("Pubsub: Subscription (%s) endpoint mounted at %s", s.Name, endpoint)
-
+	log.Printf("Pubsub: Subscription (%s) endpoint to %s mounted at %s", p.Name, p.Topic, endpoint)
 	return nil
 }
 
@@ -207,7 +214,7 @@ type PullSubscription struct {
 	HandleFunc func(s *Service, e *events.CloudEvent) bool
 
 	// The name of this Subscription. This is by default the name of the Service and you should
-	// probably keep it this way as you'll otherwise break the built in load balancing.
+	// probably keep it this way as you'll otherwise break the built-in load balancing.
 	//
 	// ¯\_(ツ)_/¯ ? Go ahead.
 	Name string
@@ -216,8 +223,11 @@ type PullSubscription struct {
 }
 
 // Setup Subscription
-func (p *PullSubscription) Setup(s *Service) error {
+func (p *PullSubscription) Setup(s *Service, ix int) error {
+
+	p.Name = subscriptionName(p, p.Name, s, ix)
 	p.service = s
+
 	return nil
 }
 
@@ -231,10 +241,8 @@ func (p *PullSubscription) Listen(s *Service) error {
 		return fmt.Errorf("failed to setup pubsub (%v)", err)
 	}
 
-	subName := p.getName()
-
 	// Check if the subscription exists already
-	sub := client.Subscription(subName)
+	sub := client.Subscription(p.Name)
 	ok, err := sub.Exists(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check subscription (%v)", err)
@@ -242,7 +250,7 @@ func (p *PullSubscription) Listen(s *Service) error {
 
 	// If it doesn't exists, well...
 	if !ok {
-		sub, err = client.CreateSubscription(ctx, subName, pubsub.SubscriptionConfig{
+		sub, err = client.CreateSubscription(ctx, p.Name, pubsub.SubscriptionConfig{
 			Topic:       client.Topic(p.Topic),
 			AckDeadline: 10 * time.Second,
 		})
@@ -272,6 +280,7 @@ func (p *PullSubscription) Listen(s *Service) error {
 		return fmt.Errorf("failed to listen for new messages (%v)", err)
 	}
 
+	log.Printf("Pubsub: Subscription (%s) listening to %s", p.Name, p.Topic)
 	return nil
 }
 
@@ -284,15 +293,18 @@ func (p *PullSubscription) Teardown(s *Service) error {
 		return fmt.Errorf("failed to setup pubsub (%v)", err)
 	}
 
-	sub := client.Subscription(p.getName())
+	sub := client.Subscription(p.Name)
 	return sub.Delete(ctx)
 }
 
-// Generate a name for the subscription.
-func (p *PullSubscription) getName() string {
-	if p.Name == "" {
-		return p.service.Name
+// subscriptionName builds a sensible name for the provided Subscription.
+// It either takes an explicitly configured Name or builds it based on the
+// passed Service and index number, e.g. alaska-v1.2.3::1
+func subscriptionName(sub Subscription, n string, s *Service, ix int) string {
+
+	if n != "" {
+		return n
 	}
 
-	return p.Name
+	return fmt.Sprintf("%s-%s::%d", s.Name, s.Version, ix)
 }

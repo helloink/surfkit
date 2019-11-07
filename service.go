@@ -21,7 +21,7 @@ type Service struct {
 	// Current version in the form x.x.x{-abc}
 	Version string
 
-	// Pubsub subscription. Use `Subscriptions` for multiple inputs.
+	// Pubsub Subscription. Use `Subscriptions` for multiple inputs.
 	// Available modes are surfkit.PushSubscription and surfkit.PullSubscription.
 	Subscription Subscription
 
@@ -64,8 +64,8 @@ func Run(s *Service, fn func()) {
 	setupServer(s)
 
 	// Setup the Pubsub subscription
-	for _, sub := range pubsubSubscriptions(s) {
-		err = sub.Setup(s)
+	for ix, sub := range pubsubSubscriptions(s) {
+		err = sub.Setup(s, ix)
 		if err != nil {
 			log.Fatal("Failed to setup Pubsub: ", err)
 		}
