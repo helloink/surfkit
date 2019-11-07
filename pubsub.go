@@ -41,7 +41,7 @@ type Subscription interface {
 
 	// Setup is called during Service initialisation and shall be used
 	// by the Subscription to create subscriptions and other prerequisites.
-	Setup(s *Service, ix int) error
+	Setup(s *Service) error
 
 	// Listen allows a Subscription to continously receive new messages.
 	// If not required by the implementation, just noop it.
@@ -49,6 +49,9 @@ type Subscription interface {
 
 	// Teardown is called during Service shutdown and shall be used to clean up.
 	Teardown(s *Service) error
+
+	// GetName returns the name of the Subscription.
+	GetName() string
 }
 
 // A PushSubscription uses an HTTP endpoint and gets
@@ -59,17 +62,21 @@ type Subscription interface {
 //
 type PushSubscription struct {
 
+	// Name this Subscription.
+	//
+	// Naming a subscription is an import aspect and therefor shall be done
+	// purposefully and well thought through. Using the Service's name is a safe bet,
+	// if the service has only one input.
+	//
+	// Remember: Subscription naming is the foundation for
+	// Pubsub based service loadbalancing.
+	Name string
+
 	// The Topic this subscription is attached to
 	Topic string
 
 	// A func that will be called as soon as a new message arrives on the attached `Topic`.
 	HandleFunc func(s *Service, e *events.CloudEvent) bool
-
-	// The name of this Subscription. This is by default the name of the Service and you should
-	// probably keep it this way as you'll otherwise break the built-in load balancing.
-	//
-	// ¯\_(ツ)_/¯ ? Go ahead.
-	Name string
 
 	// See https://godoc.org/cloud.google.com/go/pubsub#ReceiveSettings
 	ReceiveSettings *pubsub.ReceiveSettings
@@ -78,9 +85,7 @@ type PushSubscription struct {
 }
 
 // Setup receive routes and the subscription
-func (p *PushSubscription) Setup(s *Service, ix int) error {
-
-	p.Name = subscriptionName(p, p.Name, s, ix)
+func (p *PushSubscription) Setup(s *Service) error {
 	p.service = s
 
 	host, ok := os.LookupEnv("HOST")
@@ -160,6 +165,11 @@ func (p *PushSubscription) Teardown(s *Service) error {
 	return nil
 }
 
+// GetName of this Subscription
+func (p *PushSubscription) GetName() string {
+	return p.Name
+}
+
 func (p *PushSubscription) incomingPubsubMessages(w http.ResponseWriter, r *http.Request) {
 	var err error
 
@@ -223,9 +233,7 @@ type PullSubscription struct {
 }
 
 // Setup Subscription
-func (p *PullSubscription) Setup(s *Service, ix int) error {
-
-	p.Name = subscriptionName(p, p.Name, s, ix)
+func (p *PullSubscription) Setup(s *Service) error {
 	p.service = s
 
 	return nil
@@ -297,14 +305,7 @@ func (p *PullSubscription) Teardown(s *Service) error {
 	return sub.Delete(ctx)
 }
 
-// subscriptionName builds a sensible name for the provided Subscription.
-// It either takes an explicitly configured Name or builds it based on the
-// passed Service and index number, e.g. alaska-v1.2.3_1
-func subscriptionName(sub Subscription, n string, s *Service, ix int) string {
-
-	if n != "" {
-		return n
-	}
-
-	return fmt.Sprintf("%s-%s_%d", s.Name, s.Version, ix)
+// GetName of this Subscription
+func (p *PullSubscription) GetName() string {
+	return p.Name
 }

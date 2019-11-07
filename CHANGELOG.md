@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 - Pubsub: Support for multiple Pubsub Inputs (Subscriptions)
-- Pubsub: Include service version in Subscription names
+- Pubsub: Make Subscription Names explicit (and required)
 - Pubsub: Default Ack Deadlines upped to 60 seconds
 
 ## [1.5.0] - 2019-11-04

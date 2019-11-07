@@ -64,8 +64,14 @@ func Run(s *Service, fn func()) {
 	setupServer(s)
 
 	// Setup the Pubsub subscription
-	for ix, sub := range pubsubSubscriptions(s) {
-		err = sub.Setup(s, ix)
+	for _, sub := range pubsubSubscriptions(s) {
+
+		// Subscription Naming is an important thing...
+		if sub.GetName() == "" {
+			log.Fatal("Every Pubsub Subscription must have a name set.")
+		}
+
+		err = sub.Setup(s)
 		if err != nil {
 			log.Fatal("Failed to setup Pubsub: ", err)
 		}
