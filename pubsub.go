@@ -125,14 +125,14 @@ func (p *PushSubscription) Setup(s *Service, ix int) error {
 	// Check if the subscription exists already
 	ok, err = sub.Exists(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to check subscription (%v)", err)
+		return fmt.Errorf("failed to check subscription %s (%v)", p.Name, err)
 	}
 
 	// If it doesn't exists, well...
 	if !ok {
-		_, err := client.CreateSubscription(ctx, s.Name, pubsub.SubscriptionConfig{
+		_, err := client.CreateSubscription(ctx, p.Name, pubsub.SubscriptionConfig{
 			Topic:       client.Topic(p.Topic),
-			AckDeadline: 10 * time.Second,
+			AckDeadline: 60 * time.Second,
 
 			PushConfig: pubsub.PushConfig{
 				Endpoint: endpoint,
@@ -140,7 +140,7 @@ func (p *PushSubscription) Setup(s *Service, ix int) error {
 		})
 
 		if err != nil {
-			return fmt.Errorf("failed to create subscription (%v)", err)
+			return fmt.Errorf("failed to create subscription %s (%v)", p.Name, err)
 		}
 	}
 
@@ -252,7 +252,7 @@ func (p *PullSubscription) Listen(s *Service) error {
 	if !ok {
 		sub, err = client.CreateSubscription(ctx, p.Name, pubsub.SubscriptionConfig{
 			Topic:       client.Topic(p.Topic),
-			AckDeadline: 10 * time.Second,
+			AckDeadline: 60 * time.Second,
 		})
 
 		if err != nil {

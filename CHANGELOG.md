@@ -5,8 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- Support for multiple Pubsub Inputs (Subscriptions)
-- Include service version in Subscription names
+- Pubsub: Support for multiple Pubsub Inputs (Subscriptions)
+- Pubsub: Include service version in Subscription names
+- Pubsub: Default Ack Deadlines upped to 60 seconds
 
 ## [1.5.0] - 2019-11-04
 - GCP Bearer Authentication support for HTTPs
