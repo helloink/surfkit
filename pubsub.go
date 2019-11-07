@@ -245,7 +245,7 @@ func (p *PullSubscription) Listen(s *Service) error {
 	sub := client.Subscription(p.Name)
 	ok, err := sub.Exists(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to check subscription (%v)", err)
+		return fmt.Errorf("failed to check subscription %s (%v)", p.Name, err)
 	}
 
 	// If it doesn't exists, well...
@@ -256,7 +256,7 @@ func (p *PullSubscription) Listen(s *Service) error {
 		})
 
 		if err != nil {
-			return fmt.Errorf("failed to create subscription (%v)", err)
+			return fmt.Errorf("failed to create subscription %s (%v)", p.Name, err)
 		}
 	}
 
