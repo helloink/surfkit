@@ -299,12 +299,12 @@ func (p *PullSubscription) Teardown(s *Service) error {
 
 // subscriptionName builds a sensible name for the provided Subscription.
 // It either takes an explicitly configured Name or builds it based on the
-// passed Service and index number, e.g. alaska-v1.2.3::1
+// passed Service and index number, e.g. alaska-v1.2.3_1
 func subscriptionName(sub Subscription, n string, s *Service, ix int) string {
 
 	if n != "" {
 		return n
 	}
 
-	return fmt.Sprintf("%s-%s::%d", s.Name, s.Version, ix)
+	return fmt.Sprintf("%s-%s_%d", s.Name, s.Version, ix)
 }
