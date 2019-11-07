@@ -21,9 +21,11 @@ type Service struct {
 	// Current version in the form x.x.x{-abc}
 	Version string
 
-	// Pubsub subscription.
+	// Pubsub subscription. Use `Subscriptions` for multiple inputs.
 	// Available modes are surfkit.PushSubscription and surfkit.PullSubscription.
 	Subscription Subscription
+
+	Subscriptions []Subscription
 
 	// Defines the services (Pubsub) output.
 	Output *Output
@@ -91,13 +93,13 @@ func Run(s *Service, fn func()) {
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	// Enable Pubsub Listening
-	if s.Subscription != nil {
-		go func() {
-			err := s.Subscription.Listen(s)
+	for _, sub := range pubsubSubscriptions(s) {
+		go func(s *Service, sub Subscription) {
+			err := sub.Listen(s)
 			if err != nil {
 				log.Fatal("Failed to listen on Pubsub: ", err)
 			}
-		}()
+		}(s, sub)
 	}
 
 	// Any service will eventually rest on a webserver. Any empty service,
@@ -127,14 +129,24 @@ func (s *Service) Teardown() {
 	}
 
 	// Cleanup Subscriptions
-	if s.Subscription != nil {
-		err := s.Subscription.Teardown(s)
+	for _, sub := range pubsubSubscriptions(s) {
+		err := sub.Teardown(s)
 		if err != nil {
 			log.Println("Failed to teardown subscription:", err)
 		}
 	}
+
 }
 
 func convertEventTypeToTopic(eventType string) string {
 	return strings.Replace(eventType, ".", "-", -1)
+}
+
+// pubsubSubscriptions as configured via the Surfkit interface.
+func pubsubSubscriptions(s *Service) []Subscription {
+	if s.Subscription != nil {
+		return append(s.Subscriptions, s.Subscription)
+	} else {
+		return s.Subscriptions
+	}
 }
