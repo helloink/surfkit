@@ -145,7 +145,7 @@ func (p *PushSubscription) Setup(s *Service) error {
 		})
 
 		if err != nil {
-			return fmt.Errorf("failed to create subscription %s (%v)", p.Name, err)
+			return fmt.Errorf("failed to create subscription %s on %s (%v)", p.Name, p.Topic, err)
 		}
 	}
 
