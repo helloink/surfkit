@@ -38,7 +38,7 @@ func assertEnvironment(s *Service) {
 	s.Env.Port = port
 
 	// If a Pubsub Subscription is set, the project id must be set in ENV.
-	if s.Subscription != nil {
+	if s.Subscription != nil || len(s.Subscriptions) > 0 {
 		projectID, ok := os.LookupEnv("PUBSUB_PROJECT_ID")
 		if !ok {
 			log.Fatal("in order to use pubsub make sure PUBSUB_PROJECT_ID is available in ENV")
