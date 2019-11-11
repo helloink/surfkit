@@ -17,8 +17,10 @@ type Output struct {
 // PublishEvent sends the provided payload, wrapped in a CloudEvent, to all subscribers of the topic.
 // It uses the topic as defined by service.Output
 func PublishEvent(s *Service, payload interface{}) error {
+
 	eventSource := fmt.Sprintf("%s.%s", s.Name, s.Version)
 	ce := events.NewCloudEvent(eventSource, s.Output.EventType, payload)
+
 	err := s.Publisher.Send(ce)
 	if err != nil {
 		return fmt.Errorf("failed to send cloud event (%v)", err)
