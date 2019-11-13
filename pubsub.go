@@ -81,6 +81,15 @@ type PushSubscription struct {
 	// See https://godoc.org/cloud.google.com/go/pubsub#ReceiveSettings
 	ReceiveSettings *pubsub.ReceiveSettings
 
+	// How long Pub/Sub waits for the subscriber to acknowledge receipt before resending the message
+	AckDeadline time.Duration
+
+	// Experimential. Delete the Subscription on shutdown of the service.
+	DeleteOnShutdown bool
+
+	// Experimental. Delete the subscription after time.Duration (min 1day) of subscriber inactivity
+	ExpirationPolicy time.Duration
+
 	service *Service
 }
 
@@ -135,14 +144,27 @@ func (p *PushSubscription) Setup(s *Service) error {
 
 	// If it doesn't exists, well...
 	if !ok {
-		_, err := client.CreateSubscription(ctx, p.Name, pubsub.SubscriptionConfig{
+
+		ackTime := 10 * time.Second
+		if p.AckDeadline != 0 {
+			ackTime = p.AckDeadline
+		}
+
+		cfg := pubsub.SubscriptionConfig{
 			Topic:       client.Topic(p.Topic),
-			AckDeadline: 60 * time.Second,
+			AckDeadline: ackTime,
 
 			PushConfig: pubsub.PushConfig{
 				Endpoint: endpoint,
 			},
-		})
+		}
+
+		// Experimental.
+		if p.ExpirationPolicy != 0 {
+			cfg.ExpirationPolicy = p.ExpirationPolicy
+		}
+
+		_, err := client.CreateSubscription(ctx, p.Name, cfg)
 
 		if err != nil {
 			return fmt.Errorf("failed to create subscription %s on %s (%v)", p.Name, p.Topic, err)
@@ -161,7 +183,10 @@ func (p *PushSubscription) Listen(s *Service) error {
 
 // Teardown the subscription.
 func (p *PushSubscription) Teardown(s *Service) error {
-	// Noop
+	if p.DeleteOnShutdown == true {
+		return deleteSubscription(s, p.Name)
+	}
+
 	return nil
 }
 
@@ -229,6 +254,15 @@ type PullSubscription struct {
 	// ¯\_(ツ)_/¯ ? Go ahead.
 	Name string
 
+	// How long Pub/Sub waits for the subscriber to acknowledge receipt before resending the message
+	AckDeadline time.Duration
+
+	// Experimential. Delete the Subscription on shutdown of the service.
+	DeleteOnShutdown bool
+
+	// Experimental. Delete the subscription after time.Duration (min 1day) of subscriber inactivity
+	ExpirationPolicy time.Duration
+
 	service *Service
 }
 
@@ -258,10 +292,23 @@ func (p *PullSubscription) Listen(s *Service) error {
 
 	// If it doesn't exists, well...
 	if !ok {
-		sub, err = client.CreateSubscription(ctx, p.Name, pubsub.SubscriptionConfig{
+
+		ackTime := 10 * time.Second
+		if p.AckDeadline != 0 {
+			ackTime = p.AckDeadline
+		}
+
+		cfg := pubsub.SubscriptionConfig{
 			Topic:       client.Topic(p.Topic),
-			AckDeadline: 60 * time.Second,
-		})
+			AckDeadline: ackTime,
+		}
+
+		// Experimental.
+		if p.ExpirationPolicy != 0 {
+			cfg.ExpirationPolicy = p.ExpirationPolicy
+		}
+
+		sub, err = client.CreateSubscription(ctx, p.Name, cfg)
 
 		if err != nil {
 			return fmt.Errorf("failed to create subscription %s (%v)", p.Name, err)
@@ -294,6 +341,19 @@ func (p *PullSubscription) Listen(s *Service) error {
 
 // Teardown the subscription.
 func (p *PullSubscription) Teardown(s *Service) error {
+	if p.DeleteOnShutdown == true {
+		return deleteSubscription(s, p.Name)
+	}
+
+	return nil
+}
+
+// GetName of this Subscription
+func (p *PullSubscription) GetName() string {
+	return p.Name
+}
+
+func deleteSubscription(s *Service, name string) error {
 	ctx := context.Background()
 
 	client, err := pubsub.NewClient(ctx, s.Env.ProjectID)
@@ -301,11 +361,6 @@ func (p *PullSubscription) Teardown(s *Service) error {
 		return fmt.Errorf("failed to setup pubsub (%v)", err)
 	}
 
-	sub := client.Subscription(p.Name)
+	sub := client.Subscription(name)
 	return sub.Delete(ctx)
-}
-
-// GetName of this Subscription
-func (p *PullSubscription) GetName() string {
-	return p.Name
 }

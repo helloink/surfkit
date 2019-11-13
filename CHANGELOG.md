@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pubsub: Default Ack Deadlines upped to 60 seconds
 
 ## [1.5.0] - 2019-11-04
+### Added
 - GCP Bearer Authentication support for HTTPs
 
 ## [1.4.0] - 2019-10-31
