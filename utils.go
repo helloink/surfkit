@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -14,7 +15,13 @@ import (
 )
 
 // NewAuthenticateableRequest prepares a Request object to be executed
-// on the given URL with the given method. If a local metadata service is available,
+// on the given URL with the given method.
+//
+// Different strategies are applied, order as presented, to retrieve a bearer token:
+//
+// If ENV['BEARER_TOKEN'] is available in the current environment it will be used.
+//
+// If a local metadata service is available,
 // it retrieves a Bearer token from it and attaches this token to the Head of the newly
 // created request object.
 //
@@ -33,8 +40,41 @@ func NewAuthenticateableRequest(method, url string, body io.Reader) (*http.Reque
 		return http.NewRequest(method, url, body)
 	}
 
+	authToken, err := readBearerToken(url)
+
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", authToken))
+	return req, nil
+
+}
+
+// DoAuthenticateableRequest creates an authenticatable http Request and executes it.
+// See NewAuthenticateableRequest for more details
+func DoAuthenticateableRequest(method, url string, body io.Reader) (*http.Response, error) {
+	var err error
+
+	req, err := NewAuthenticateableRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{}
+	return client.Do(req)
+}
+
+// readBearerToken from environment or metadata service
+func readBearerToken(url string) (string, error) {
 	var authToken string
 	var err error
+
+	token, ok := os.LookupEnv("BEARER_TOKEN")
+	if ok {
+		return token, nil
+	}
 
 	maxbackoff := time.Now().Add(16 * time.Second)
 	backoffIter := 1
@@ -60,12 +100,12 @@ func NewAuthenticateableRequest(method, url string, body io.Reader) (*http.Reque
 
 			// All other errors
 			default:
-				return nil, fmt.Errorf("AuthenticatedRequest: Failed to query metadata: (%+v)", err)
+				return "", fmt.Errorf("AuthenticatedRequest: Failed to query metadata: (%+v)", err)
 			}
 		}
 
 		if time.Now().After(maxbackoff) {
-			return nil, fmt.Errorf("AuthenticatedRequest: Failed to query metadata. Max backoff time passed")
+			return "", fmt.Errorf("AuthenticatedRequest: Failed to query metadata. Max backoff time passed")
 		}
 
 		waitTime := (backoffIter * 1000) + rand.New(rand.NewSource(time.Now().UnixNano())).Intn(500)
@@ -75,26 +115,5 @@ func NewAuthenticateableRequest(method, url string, body io.Reader) (*http.Reque
 		time.Sleep(time.Duration(waitTime) * time.Millisecond)
 	}
 
-	req, err := http.NewRequest(method, url, body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", authToken))
-	return req, nil
-
-}
-
-// DoAuthenticateableRequest creates an authenticatable http Request and executes it.
-// See NewAuthenticateableRequest for more details
-func DoAuthenticateableRequest(method, url string, body io.Reader) (*http.Response, error) {
-	var err error
-
-	req, err := NewAuthenticateableRequest(method, url, body)
-	if err != nil {
-		return nil, err
-	}
-
-	client := &http.Client{}
-	return client.Do(req)
+	return authToken, nil
 }

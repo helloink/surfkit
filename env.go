@@ -16,6 +16,7 @@ type ServiceEnv struct {
 }
 
 // Env reads a variable from ENV or fails fatal
+// TODO: - I think this method should totally be called EnvF [AW]
 func Env(s string) string {
 	val, ok := os.LookupEnv(s)
 	if !ok {
