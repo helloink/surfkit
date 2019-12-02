@@ -34,8 +34,6 @@ func enableServer(s *Service) error {
 		ReadTimeout:  timeout,
 	}
 
-	log.Printf("{SK}[DEBUG] Writetime: %v, Read: %v", s.Srv.WriteTimeout, s.Srv.ReadTimeout)
-
 	log.Printf("Server enabled on port %s", s.Env.Port)
 	return s.Srv.ListenAndServe()
 }
