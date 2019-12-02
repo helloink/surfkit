@@ -10,6 +10,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const defaultTimeout = 60 * time.Second
+
 func setupServer(s *Service) {
 	s.Router = mux.NewRouter()
 	s.Router.HandleFunc("/", healthEndpoint).Methods("GET")
@@ -22,11 +24,14 @@ func healthEndpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 func enableServer(s *Service) error {
+
+	timeout := getTimeout(s)
+
 	s.Srv = &http.Server{
 		Handler:      s.SrvHandler,
 		Addr:         fmt.Sprintf(":%s", s.Env.Port),
-		WriteTimeout: 60 * time.Second,
-		ReadTimeout:  60 * time.Second,
+		WriteTimeout: timeout,
+		ReadTimeout:  timeout,
 	}
 
 	log.Printf("Server enabled on port %s", s.Env.Port)
@@ -41,4 +46,13 @@ func shutdownServer(s *Service) {
 	if err != nil {
 		log.Fatalf("Server Shutdown Failed: %+v", err)
 	}
+}
+
+// getTimeout from user configuration or take defaults
+func getTimeout(s *Service) time.Duration {
+	if s.SrvTimeout == 0 {
+		return defaultTimeout
+	}
+
+	return s.SrvTimeout
 }

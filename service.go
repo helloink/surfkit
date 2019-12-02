@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/helloink/surfkit/events"
@@ -35,6 +36,9 @@ type Service struct {
 
 	// Srv allows access to the underlying webserver.
 	Srv *http.Server
+
+	// SrvTimeout sets the read & write timeouts of the underlying webserver
+	SrvTimeout time.Duration
 
 	// SrvHandler allows to set the request handler. If set, make sure it
 	// eventually wraps service.Router.
