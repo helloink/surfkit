@@ -9,7 +9,7 @@ import (
 const version = "1.9.0"
 
 // Output defines the single channel on which the service produces output, given it is a Pubsub output.
-// Eventuall this should also cover HTTP Endpoints.
+// Eventually this should also cover HTTP Endpoints.
 type Output struct {
 	EventType string
 }
