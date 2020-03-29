@@ -28,7 +28,7 @@ func main() {
 
 // Return `true` if you want the underlying pubsub message to be acknowledged (ack)
 // and `false` for nack.
-func handleMessages(s *surfkit.Service, e *surfkit.Event) bool {
+func handleMessages(s *surfkit.Service, e *surfkit.CloudEvent) bool {
 	return true
 }
 ```
