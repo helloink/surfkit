@@ -17,11 +17,25 @@ type Output struct {
 // PublishEvent sends the provided payload, wrapped in a CloudEvent, to all subscribers of the topic.
 // It uses the topic as defined by service.Output
 func PublishEvent(s *Service, payload interface{}) error {
+	return publish(s, s.Publisher, payload)
+}
 
+// PublishEvent sends the provided payload, wrapped in a CloudEvent, to all subscribers of the given
+// topic. The topic must be either the topic defined by service.Output or one of the topics defined
+// by service.Outputs.
+func PublishEventTo(s *Service, eventType string, payload interface{}) error {
+	publisher, ok := s.Publishers[eventType]
+	if !ok {
+		return fmt.Errorf("unknown publisher: %s", eventType)
+	}
+	return publish(s, publisher, payload)
+}
+
+func publish(s *Service, p *events.Publisher, payload interface{}) error {
 	eventSource := fmt.Sprintf("%s.%s", s.Name, s.Version)
 	ce := events.NewCloudEvent(eventSource, s.Output.EventType, payload)
 
-	err := s.Publisher.Send(ce)
+	err := p.Send(ce)
 	if err != nil {
 		return fmt.Errorf("failed to send cloud event (%v)", err)
 	}
