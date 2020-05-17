@@ -6,7 +6,7 @@ import (
 	"github.com/helloink/surfkit/events"
 )
 
-const version = "1.9.0"
+const version = "1.9.1"
 
 // Output defines the single channel on which the service produces output, given it is a Pubsub output.
 // Eventually this should also cover HTTP Endpoints.
