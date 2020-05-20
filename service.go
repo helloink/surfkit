@@ -31,6 +31,8 @@ type Service struct {
 	// Defines the services (Pubsub) output.
 	Output *Output
 
+	Outputs []*Output
+
 	// A Router can be used to attach URL handlers
 	Router *mux.Router
 
@@ -47,6 +49,8 @@ type Service struct {
 	// A Publisher take care of sending events to Pubsub.
 	// Use surfkit.PublishEvent for a convinient method to send events.
 	Publisher *events.Publisher
+
+	Publishers map[string]*events.Publisher
 
 	// Env contains configuration read from the environment and is automatically set
 	Env *ServiceEnv
@@ -81,17 +85,17 @@ func Run(s *Service, fn func()) {
 		}
 	}
 
-	// Setup the Publisher
+	// Setup publishers
+	s.Publishers = make(map[string]*events.Publisher)
 	if s.Output != nil {
-
-		s.Publisher = &events.Publisher{
-			ProjectID: Env("PUBSUB_PROJECT_ID"),
-			Topic:     s.Output.EventType,
-		}
-
-		err := s.Publisher.Setup()
-		if err != nil {
-			log.Fatal("Failed to setup Output Publisher: ", err)
+		eventType := s.Output.EventType
+		publisher := setupPublisher(eventType)
+		s.Publisher = publisher
+		s.Publishers[eventType] = publisher
+	}
+	if s.Outputs != nil {
+		for _, o := range s.Outputs {
+			s.Publishers[o.EventType] = setupPublisher(o.EventType)
 		}
 	}
 
@@ -137,6 +141,9 @@ func (s *Service) Teardown() {
 	if s.Publisher != nil {
 		s.Publisher.Stop()
 	}
+	for _, p := range s.Publishers {
+		p.Stop()
+	}
 
 	// Cleanup Subscriptions
 	for _, sub := range pubsubSubscriptions(s) {
@@ -159,4 +166,18 @@ func pubsubSubscriptions(s *Service) []Subscription {
 	}
 
 	return s.Subscriptions
+}
+
+func setupPublisher(eventType string) *events.Publisher {
+	publisher := &events.Publisher{
+		ProjectID: Env("PUBSUB_PROJECT_ID"),
+		Topic:     eventType,
+	}
+
+	err := publisher.Setup()
+	if err != nil {
+		log.Fatal("Failed to setup Publisher: ", err)
+	}
+
+	return publisher
 }
